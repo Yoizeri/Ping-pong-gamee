@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Senpai's Mobile Pong - Difficulties</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            position: relative;
+            user-select: none;
+        }
+        #touch-zone {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 50%;
+            height: 100%;
+            z-index: 5;
+            touch-action: none;
+            display: none; /* Hidden until game starts */
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            background: #111;
+        }
+        /* Menu Overlay styling */
+        #menu-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+        }
+        h1 {
+            color: #fff;
+            margin-bottom: 20px;
+            font-size: 2.5rem;
+            text-shadow: 0 0 10px #00ffcc;
+        }
+        .btn-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            width: 80%;
+            max-width: 400px;
+        }
+        button {
+            padding: 15px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.1s;
+            color: #fff;
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+        .btn-easy { background-color: #2ed573; }
+        .btn-medium { background-color: #ffa502; }
+        .btn-hard { background-color: #ff4757; }
+        .btn-impossible { 
+            background-color: #8e44ad; 
+            box-shadow: 0 0 15px #8e44ad;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.9; }
+            50% { opacity: 1; box-shadow: 0 0 25px #8e44ad; }
+            100% { opacity: 0.9; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Difficulty Menu -->
+    <div id="menu-overlay">
+        <h1>Select Difficulty, Senpai!</h1>
+        <div class="btn-container">
+            <button class="btn-easy" onclick="startGame('easy')">Easy</button>
+            <button class="btn-medium" onclick="startGame('medium')">Medium</button>
+            <button class="btn-hard" onclick="startGame('hard')">Hard</button>
+            <button class="btn-impossible" onclick="startGame('impossible')">Impossible 💀</button>
+        </div>
+    </div>
+
+    <div id="touch-zone"></div>
+    <canvas id="pongCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById("pongCanvas");
+        const ctx = canvas.getContext("2d");
+        const touchZone = document.getElementById("touch-zone");
+        const menuOverlay = document.getElementById("menu-overlay");
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const paddleWidth = 15;
+        let ballRadius = 10;
+        let gameRunning = false;
+
+        const player = { x: 30, y: 0, width: paddleWidth, height: 100, score: 0 };
+        const ai = { x: 0, y: 0, width: paddleWidth, height: 100, score: 0, speed: 4 };
+        const ball = { x: 0, y: 0, radius: ballRadius, speedX: 5, speedY: 3, baseSpeedX: 5 };
+
+        // Difficulty Tuning
+        function startGame(difficulty) {
+            menuOverlay.style.display = "none";
+            touchZone.style.display = "block";
+            
+            // Default sizes based on screen height
+            let basePaddleHeight = canvas.height * 0.22;
+            player.height = basePaddleHeight;
+            ai.height = basePaddleHeight;
+
+            switch(difficulty) {
+                case 'easy':
+                    ai.speed = canvas.height * 0.006; // Slow tracking
+                    ball.baseSpeedX = 5;
+                    break;
+                case 'medium':
+                    ai.speed = canvas.height * 0.009; // Moderate tracking
+                    ball.baseSpeedX = 7;
+                    break;
+                case 'hard':
+                    ai.speed = canvas.height * 0.013; // Fast tracking
+                    ball.baseSpeedX = 9;
+                    break;
+                case 'impossible':
+                    ai.speed = canvas.height * 0.025; // Blazing fast AI tracking
+                    player.height = basePaddleHeight * 0.65; // Shrunk player paddle! 🤏
+                    ball.baseSpeedX = 12; // Hyper fast ball
+                    break;
+            }
+
+            // Init positions
+            player.y = canvas.height / 2 - player.height / 2;
+            ai.y = canvas.height / 2 - ai.height / 2;
+            ai.x = canvas.width - 30 - paddleWidth;
+            
+            resetBall();
+            gameRunning = true;
+            gameLoop();
+        }
+
+        // Controls
+        function handleTouch(e) {
+            if (!gameRunning) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            player.y = touch.clientY - player.height / 2;
+            
+            if (player.y < 0) player.y = 0;
+            if (player.y + player.height > canvas.height) player.y = canvas.height - player.height;
+        }
+
+        touchZone.addEventListener('touchstart', handleTouch, { passive: false });
+        touchZone.addEventListener('touchmove', handleTouch, { passive: false });
+
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.speedX = (Math.random() > 0.5 ? 1 : -1) * ball.baseSpeedX;
+            ball.speedY = (Math.random() - 0.5) * ball.baseSpeedX;
+        }
+
+        function drawRect(x, y, w, h, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, w, h);
+        }
+
+        function drawCircle(x, y, r, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawText(text, x, y, size) {
+            ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+            ctx.font = `bold ${size}px Arial`;
+            ctx.textAlign = "center";
+            ctx.fillText(text, x, y);
+        }
+
+        function update() {
+            ai.x = canvas.width - 30 - paddleWidth;
+
+            // Ball Physics
+            ball.x += ball.speedX;
+            ball.y += ball.speedY;
+
+            // AI Tracking Engine
+            let aiTarget = ball.y - (ai.height / 2);
+            if (Math.abs(ai.y - aiTarget) > 5) {
+                if (ai.y < aiTarget) ai.y += ai.speed;
+                else if (ai.y > aiTarget) ai.y -= ai.speed;
+            }
+
+            if (ai.y < 0) ai.y = 0;
+            if (ai.y + ai.height > canvas.height) ai.y = canvas.height - ai.height;
+
+            // Bounce Ceiling/Floor
+            if (ball.y - ball.radius < 0) {
+                ball.y = ball.radius;
+                ball.speedY = -ball.speedY;
+            } else if (ball.y + ball.radius > canvas.height) {
+                ball.y = canvas.height - ball.radius;
+                ball.speedY = -ball.speedY;
+            }
+
+            // Paddle Collisions
+            let paddle = (ball.x < canvas.width / 2) ? player : ai;
+            if (ball.x + ball.radius > paddle.x && ball.x - ball.radius < paddle.x + paddle.width) {
+                if (ball.y + ball.radius > paddle.y && ball.y - ball.radius < paddle.y + paddle.height) {
+                    ball.speedX = -ball.speedX;
+                    let collidePoint = ball.y - (paddle.y + paddle.height / 2);
+                    collidePoint = collidePoint / (paddle.height / 2);
+                    ball.speedY = collidePoint * ball.baseSpeedX;
+                }
+            }
+
+            // Goal Scoring
+            if (ball.x - ball.radius < 0) {
+                ai.score++;
+                resetBall();
+            } else if (ball.x + ball.radius > canvas.width) {
+                player.score++;
+                resetBall();
+            }
+        }
+
+        function render() {
+            drawRect(0, 0, canvas.width, canvas.height, "#111");
+
+            // Net Line
+            for (let i = 0; i < canvas.height; i += 30) {
+                drawRect(canvas.width / 2 - 1, i, 2, 15, "rgba(255, 255, 255, 0.1)");
+            }
+
+            // Draw Paddles & Ball
+            drawRect(player.x, player.y, player.width, player.height, "#00ffcc"); // Teal Player
+            drawRect(ai.x, ai.y, ai.width, ai.height, "#ff4757"); // Coral AI
+            drawCircle(ball.x, ball.y, ball.radius, "#FFF");
+
+            // Scores
+            const scoreSize = Math.max(canvas.width * 0.08, 40);
+            drawText(player.score, canvas.width / 4, canvas.height / 2 + scoreSize/3, scoreSize);
+            drawText(ai.score, 3 * canvas.width / 4, canvas.height / 2 + scoreSize/3, scoreSize);
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
